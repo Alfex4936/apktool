@@ -14,528 +14,381 @@
  *  limitations under the License.
  */
 
-package brut.androlib;
+package brut.apktool;
 
+import brut.androlib.Androlib;
+import brut.androlib.AndrolibException;
+import brut.androlib.ApkDecoder;
+import brut.androlib.ApktoolProperties;
+import brut.androlib.err.CantFindFrameworkResException;
 import brut.androlib.err.InFileNotFoundException;
-import brut.androlib.java.AndrolibJava;
-import brut.androlib.res.AndrolibResources;
-import brut.androlib.res.data.ResPackage;
-import brut.androlib.res.data.ResTable;
+import brut.androlib.err.OutDirExistsException;
 import brut.androlib.res.util.ExtFile;
-import brut.androlib.src.SmaliBuilder;
-import brut.androlib.src.SmaliDecoder;
 import brut.common.BrutException;
-import brut.directory.*;
-import brut.util.BrutIO;
-import brut.util.OS;
-import java.io.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Logger;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
+import java.util.logging.*;
 
 /**
  * @author Ryszard Wiśniewski <brut.alll@gmail.com>
  */
-public class Androlib {
-	private final AndrolibResources mAndRes = new AndrolibResources();
-
-	public ResTable getResTable(ExtFile apkFile) throws AndrolibException {
-		return mAndRes.getResTable(apkFile, true);
-	}
-
-	public ResTable getResTable(ExtFile apkFile, boolean loadMainPkg)
-			throws AndrolibException {
-		return mAndRes.getResTable(apkFile, loadMainPkg);
-	}
-
-	public void decodeSourcesRaw(ExtFile apkFile, File outDir, boolean debug)
-			throws AndrolibException {
+public class Main {
+	public static void main(String[] args) throws IOException,
+			InterruptedException, BrutException {
 		try {
-			Directory apk = apkFile.getDirectory();
-			LOGGER.info("Copying raw classes.dex file...");
-			apkFile.getDirectory().copyToDir(outDir, "classes.dex");
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
+			Verbosity verbosity = Verbosity.NORMAL;
+			int i;
+			for (i = 0; i < args.length; i++) {
+				String opt = args[i];
 
-	public void decodeSourcesSmali(File apkFile, File outDir, boolean debug,
-			boolean bakdeb) throws AndrolibException {
-		try {
-			File smaliDir = new File(outDir, SMALI_DIRNAME);
-			OS.rmdir(smaliDir);
-			smaliDir.mkdirs();
-			LOGGER.info("Baksmaling...");
-			SmaliDecoder.decode(apkFile, smaliDir, debug, bakdeb);
-		} catch (BrutException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public void decodeSourcesJava(ExtFile apkFile, File outDir, boolean debug)
-			throws AndrolibException {
-		LOGGER.info("Decoding Java sources...");
-		new AndrolibJava().decode(apkFile, outDir);
-	}
-
-	public void decodeManifestRaw(ExtFile apkFile, File outDir)
-			throws AndrolibException {
-		try {
-			Directory apk = apkFile.getDirectory();
-			LOGGER.info("Copying raw manifest...");
-			apkFile.getDirectory().copyToDir(outDir, APK_MANIFEST_FILENAMES);
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public void decodeManifestFull(ExtFile apkFile, File outDir,
-			ResTable resTable) throws AndrolibException {
-		mAndRes.decodeManifest(resTable, apkFile, outDir);
-	}
-
-	public void decodeResourcesRaw(ExtFile apkFile, File outDir)
-			throws AndrolibException {
-		try {
-			// Directory apk = apkFile.getDirectory();
-			LOGGER.info("Copying raw resources...");
-			apkFile.getDirectory().copyToDir(outDir, APK_RESOURCES_FILENAMES);
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public void decodeResourcesFull(ExtFile apkFile, File outDir,
-			ResTable resTable) throws AndrolibException {
-		mAndRes.decode(resTable, apkFile, outDir);
-	}
-
-	public void decodeRawFiles(ExtFile apkFile, File outDir)
-			throws AndrolibException {
-		LOGGER.info("Copying assets and libs...");
-		try {
-			Directory in = apkFile.getDirectory();
-			if (in.containsDir("assets")) {
-				in.copyToDir(outDir, "assets");
-			}
-			if (in.containsDir("lib")) {
-				in.copyToDir(outDir, "lib");
-			}
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public void writeMetaFile(File mOutDir, Map<String, Object> meta)
-			throws AndrolibException {
-		DumperOptions options = new DumperOptions();
-		options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-		// options.setIndent(4);
-		Yaml yaml = new Yaml(options);
-
-		FileWriter writer = null;
-		try {
-			writer = new FileWriter(new File(mOutDir, "apktool.yml"));
-			yaml.dump(meta, writer);
-		} catch (IOException ex) {
-			throw new AndrolibException(ex);
-		} finally {
-			if (writer != null) {
-				try {
-					writer.close();
-				} catch (IOException ex) {
+				if (opt.startsWith("--version") || (opt.startsWith("-version"))) {
+					version_print();
+					System.exit(1);
+				}
+				if (!opt.startsWith("-")) {
+					break;
+				}
+				if ("-v".equals(opt) || "--verbose".equals(opt)) {
+					if (verbosity != Verbosity.NORMAL) {
+						throw new InvalidArgsError();
+					}
+					verbosity = Verbosity.VERBOSE;
+				} else if ("-q".equals(opt) || "--quiet".equals(opt)) {
+					if (verbosity != Verbosity.NORMAL) {
+						throw new InvalidArgsError();
+					}
+					verbosity = Verbosity.QUIET;
+				} else {
+					throw new InvalidArgsError();
 				}
 			}
+			setupLogging(verbosity);
+
+			if (args.length <= i) {
+				throw new InvalidArgsError();
+			}
+			String cmd = args[i];
+			args = Arrays.copyOfRange(args, i + 1, args.length);
+
+			if ("d".equals(cmd) || "decode".equals(cmd)) {
+				cmdDecode(args);
+			} else if ("b".equals(cmd) || "build".equals(cmd)) {
+				cmdBuild(args);
+			} else if ("if".equals(cmd) || "install-framework".equals(cmd)) {
+				cmdInstallFramework(args);
+			} else if ("publicize-resources".equals(cmd)) {
+				cmdPublicizeResources(args);
+			} else {
+				throw new InvalidArgsError();
+			}
+		} catch (InvalidArgsError ex) {
+			usage();
+			System.exit(1);
 		}
 	}
 
-	public Map<String, Object> readMetaFile(ExtFile appDir)
-			throws AndrolibException {
-		InputStream in = null;
-		try {
-			in = appDir.getDirectory().getFileInput("apktool.yml");
-			Yaml yaml = new Yaml();
-			return (Map<String, Object>) yaml.load(in);
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		} finally {
-			if (in != null) {
-				try {
-					in.close();
-				} catch (IOException ex) {
+	private static void cmdDecode(String[] args) throws InvalidArgsError,
+			AndrolibException {
+		ApkDecoder decoder = new ApkDecoder();
+
+		int i;
+		for (i = 0; i < args.length; i++) {
+			String opt = args[i];
+			if (!opt.startsWith("-")) {
+				break;
+			}
+			if ("-s".equals(opt) || "--no-src".equals(opt)) {
+				decoder.setDecodeSources(ApkDecoder.DECODE_SOURCES_NONE);
+			} else if ("-d".equals(opt) || "--debug".equals(opt)) {
+				decoder.setDebugMode(true);
+			} else if ("-b".equals(opt) || "--no-debug-info".equals(opt)) {
+				decoder.setBaksmaliDebugMode(false);
+			} else if ("-t".equals(opt) || "--frame-tag".equals(opt)) {
+				i++;
+				if (i >= args.length) {
+					throw new InvalidArgsError();
 				}
+				decoder.setFrameworkTag(args[i]);
+			} else if ("-f".equals(opt) || "--force".equals(opt)) {
+				decoder.setForceDelete(true);
+			} else if ("-r".equals(opt) || "--no-res".equals(opt)) {
+				decoder.setDecodeResources(ApkDecoder.DECODE_RESOURCES_NONE);
+			} else if ("--keep-broken-res".equals(opt)) {
+				decoder.setKeepBrokenResources(true);
+			} else if ("--frame-path".equals(opt)) {
+				i++;
+        if (i >= args.length) {
+          throw new InvalidArgsError();
+        }
+				decoder.setFrameworkDir(args[i]);
+			} else {
+				throw new InvalidArgsError();
 			}
 		}
-	}
 
-	public void build(File appDir, File outFile,
-			HashMap<String, Boolean> flags, ExtFile origApk, String aaptPath)
-			throws BrutException {
-		build(new ExtFile(appDir), outFile, flags, origApk, aaptPath);
-	}
-
-	public void build(ExtFile appDir, File outFile,
-			HashMap<String, Boolean> flags, ExtFile origApk, String aaptPath)
-			throws BrutException {
-
-		mAaptPath = aaptPath;
-		Map<String, Object> meta = readMetaFile(appDir);
-		Object t1 = meta.get("isFrameworkApk");
-		flags.put("framework", t1 == null ? false : (Boolean) t1);
-		flags.put("compression", meta.get("compressionType") == null ? false
-				: (Boolean) meta.get("compressionType"));
-		mAndRes.setSdkInfo((Map<String, String>) meta.get("sdkInfo"));
-
-		if (outFile == null) {
-			String outFileName = (String) meta.get("apkFileName");
-			outFile = new File(appDir, "dist" + File.separator
-					+ (outFileName == null ? "out.apk" : outFileName));
+		String outName = null;
+		if (args.length == i + 2) {
+			outName = args[i + 1];
+		} else if (args.length == i + 1) {
+			outName = args[i];
+			outName = outName.endsWith(".apk") ? outName.substring(0,
+					outName.length() - 4) : outName + ".out";
+			outName = new File(outName).getName();
+		} else {
+			throw new InvalidArgsError();
 		}
+		File outDir = new File(outName);
+		decoder.setOutDir(outDir);
+		decoder.setApkFile(new File(args[i]));
 
-		new File(appDir, APK_DIRNAME).mkdirs();
-		buildSources(appDir, flags);
-		buildResources(appDir, flags,
-				(Map<String, Object>) meta.get("usesFramework"));
-		buildLib(appDir, flags);
-		buildApk(appDir, outFile, flags);
-	}
-
-	public void buildSources(File appDir, HashMap<String, Boolean> flags)
-			throws AndrolibException {
-		if (!buildSourcesRaw(appDir, flags)
-				&& !buildSourcesSmali(appDir, flags)
-				&& !buildSourcesJava(appDir, flags)) {
-			LOGGER.warning("Could not find sources");
-		}
-	}
-
-	public boolean buildSourcesRaw(File appDir, HashMap<String, Boolean> flags)
-			throws AndrolibException {
 		try {
-			File working = new File(appDir, "classes.dex");
-			if (!working.exists()) {
-				return false;
-			}
-			File stored = new File(appDir, APK_DIRNAME + "/classes.dex");
-			if (flags.get("forceBuildAll") || isModified(working, stored)) {
-				LOGGER.info("Copying classes.dex file...");
-				BrutIO.copyAndClose(new FileInputStream(working),
-						new FileOutputStream(stored));
-			}
-			return true;
+			decoder.decode();
+		} catch (OutDirExistsException ex) {
+			System.out
+					.println("Destination directory ("
+							+ outDir.getAbsolutePath()
+							+ ") "
+							+ "already exists. Use -f switch if you want to overwrite it.");
+			System.exit(1);
+		} catch (InFileNotFoundException ex) {
+			System.out.println("Input file (" + args[i] + ") "
+					+ "was not found or was not readable.");
+			System.exit(1);
+		} catch (CantFindFrameworkResException ex) {
+			System.out
+					.println("Can't find framework resources for package of id: "
+							+ String.valueOf(ex.getPkgId())
+							+ ". You must install proper "
+							+ "framework files, see project website for more info.");
+			System.exit(1);
 		} catch (IOException ex) {
-			throw new AndrolibException(ex);
+			System.out
+					.println("Could not modify file. Please ensure you have permission.");
+			System.exit(1);
 		}
+
 	}
 
-	public boolean buildSourcesSmali(File appDir, HashMap<String, Boolean> flags)
-			throws AndrolibException {
-		ExtFile smaliDir = new ExtFile(appDir, "smali");
-		if (!smaliDir.exists()) {
-			return false;
-		}
-		File dex = new File(appDir, APK_DIRNAME + "/classes.dex");
-		if (!flags.get("forceBuildAll")) {
-			LOGGER.info("Checking whether sources has changed...");
-		}
-		if (flags.get("forceBuildAll") || isModified(smaliDir, dex)) {
-			LOGGER.info("Smaling...");
-			dex.delete();
-			SmaliBuilder.build(smaliDir, dex, flags);
-		}
-		return true;
-	}
+	private static void cmdBuild(String[] args) throws BrutException {
 
-	public boolean buildSourcesJava(File appDir, HashMap<String, Boolean> flags)
-			throws AndrolibException {
-		File javaDir = new File(appDir, "src");
-		if (!javaDir.exists()) {
-			return false;
-		}
-		File dex = new File(appDir, APK_DIRNAME + "/classes.dex");
-		if (!flags.get("forceBuildAll")) {
-			LOGGER.info("Checking whether sources has changed...");
-		}
-		if (flags.get("forceBuildAll") || isModified(javaDir, dex)) {
-			LOGGER.info("Building java sources...");
-			dex.delete();
-			new AndrolibJava().build(javaDir, dex);
-		}
-		return true;
-	}
+	  Androlib instance = new Androlib();
+	  
+		// hold all the fields
+		HashMap<String, Boolean> flags = new HashMap<String, Boolean>();
+		flags.put("forceBuildAll", false);
+		flags.put("debug", false);
+		flags.put("verbose", false);
+		flags.put("injectOriginal", false);
+		flags.put("framework", false);
+		flags.put("update", false);
+		flags.put("copyOriginal", false);
 
-	public void buildResources(ExtFile appDir, HashMap<String, Boolean> flags,
-			Map<String, Object> usesFramework) throws BrutException {
-		if (!buildResourcesRaw(appDir, flags)
-				&& !buildResourcesFull(appDir, flags, usesFramework)
-				&& !buildManifest(appDir, flags, usesFramework)) {
-			LOGGER.warning("Could not find resources");
-		}
-	}
+		int i;
+		int skip = 0;
 
-	public boolean buildResourcesRaw(ExtFile appDir,
-			HashMap<String, Boolean> flags) throws AndrolibException {
-		try {
-			if (!new File(appDir, "resources.arsc").exists()) {
-				return false;
+		ExtFile mOrigApk = null;
+		String mAaptPath = "";
+		for (i = 0; i < args.length; i++) {
+			String opt = args[i];
+			if (!opt.startsWith("-")) {
+				break;
 			}
-			File apkDir = new File(appDir, APK_DIRNAME);
-			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
-			}
-			if (flags.get("forceBuildAll")
-					|| isModified(newFiles(APK_RESOURCES_FILENAMES, appDir),
-							newFiles(APK_RESOURCES_FILENAMES, apkDir))) {
-				LOGGER.info("Copying raw resources...");
-				appDir.getDirectory()
-						.copyToDir(apkDir, APK_RESOURCES_FILENAMES);
-			}
-			return true;
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public boolean buildResourcesFull(File appDir,
-			HashMap<String, Boolean> flags, Map<String, Object> usesFramework)
-			throws AndrolibException {
-		try {
-			if (!new File(appDir, "res").exists()) {
-				return false;
-			}
-			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
-			}
-			File apkDir = new File(appDir, APK_DIRNAME);
-			if (flags.get("forceBuildAll")
-					|| isModified(newFiles(APP_RESOURCES_FILENAMES, appDir),
-							newFiles(APK_RESOURCES_FILENAMES, apkDir))) {
-				LOGGER.info("Building resources...");
-
-				File apkFile = File.createTempFile("APKTOOL", null);
-				apkFile.delete();
-
-				File ninePatch = new File(appDir, "9patch");
-				if (!ninePatch.exists()) {
-					ninePatch = null;
+			if ("-f".equals(opt) || "--force-all".equals(opt)) {
+				flags.put("forceBuildAll", true);
+			} else if ("-d".equals(opt) || "--debug".equals(opt)) {
+				flags.put("debug", true);
+			} else if ("-v".equals(opt) || "--verbose".equals(opt)) {
+				flags.put("verbose", true);
+			} else if ("-a".equals(opt) || "--aapt".equals(opt)) {
+				mAaptPath = args[i + 1];
+				skip = 1;
+			} else if ("-c".equals(opt) || "--copy-original".equals(opt)) {
+				flags.put("copyOriginal", true);
+			} else if ("--frame-path".equals(opt)) {
+			    i++;
+	        instance.setFrameworkFolder(args[i]);
+			} else if ("-o".equals(opt) || "--original".equals(opt)) {
+				if (args.length >= 4) {
+					throw new InvalidArgsError();
+				} else {
+					flags.put("injectOriginal", true);
+					mOrigApk = new ExtFile(args[i + 1]);
+					skip = 1;
 				}
-				mAndRes.aaptPackage(apkFile, new File(appDir,
-						"AndroidManifest.xml"), new File(appDir, "res"),
-						ninePatch, null, parseUsesFramework(usesFramework),
-						flags, mAaptPath);
-
-				Directory tmpDir = new ExtFile(apkFile).getDirectory();
-				tmpDir.copyToDir(apkDir,
-						tmpDir.containsDir("res") ? APK_RESOURCES_FILENAMES
-								: APK_RESOURCES_WITHOUT_RES_FILENAMES);
-
-				// delete tmpDir
-				apkFile.delete();
+			} else {
+				throw new InvalidArgsError();
 			}
-			return true;
-		} catch (IOException ex) {
-			throw new AndrolibException(ex);
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		} catch (BrutException ex) {
-			throw new AndrolibException(ex);
 		}
+
+		String appDirName;
+		File outFile = null;
+		switch (args.length - i - skip) {
+		case 0:
+			appDirName = ".";
+			break;
+		case 2:
+			outFile = new File(args[i + 1 + skip]);
+		case 1:
+			appDirName = args[i + skip];
+			break;
+		default:
+			throw new InvalidArgsError();
+		}
+
+		instance.build(new File(appDirName), outFile, flags, mOrigApk,
+				mAaptPath);
 	}
 
-	public boolean buildManifestRaw(ExtFile appDir,
-			HashMap<String, Boolean> flags) throws AndrolibException {
-		try {
-			File apkDir = new File(appDir, APK_DIRNAME);
-			LOGGER.info("Copying raw AndroidManifest.xml...");
-			appDir.getDirectory().copyToDir(apkDir, APK_MANIFEST_FILENAMES);
-			return true;
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		}
-	}
-
-	public boolean buildManifest(ExtFile appDir,
-			HashMap<String, Boolean> flags, Map<String, Object> usesFramework)
-			throws BrutException {
-		try {
-			if (!new File(appDir, "AndroidManifest.xml").exists()) {
-				return false;
-			}
-			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
-			}
-			
-			File apkDir = new File(appDir, APK_DIRNAME);
-			
-			if (flags.get("debug")) {
-				mAndRes.remove_application_debug(new File(apkDir,"AndroidManifest.xml").getAbsolutePath());
-			}
-
-			if (flags.get("forceBuildAll")
-					|| isModified(newFiles(APK_MANIFEST_FILENAMES, appDir),
-							newFiles(APK_MANIFEST_FILENAMES, apkDir))) {
-				LOGGER.info("Building AndroidManifest.xml...");
-
-				File apkFile = File.createTempFile("APKTOOL", null);
-				apkFile.delete();
-
-				File ninePatch = new File(appDir, "9patch");
-				if (!ninePatch.exists()) {
-					ninePatch = null;
-				}
-
-				mAndRes.aaptPackage(apkFile, new File(appDir,
-						"AndroidManifest.xml"), null, ninePatch, null,
-						parseUsesFramework(usesFramework), flags, mAaptPath);
-
-				Directory tmpDir = new ExtFile(apkFile).getDirectory();
-				tmpDir.copyToDir(apkDir, APK_MANIFEST_FILENAMES);
-
-			}
-			return true;
-		} catch (IOException ex) {
-			throw new AndrolibException(ex);
-		} catch (DirectoryException ex) {
-			throw new AndrolibException(ex);
-		} catch (AndrolibException ex) {
-			LOGGER.warning("Parse AndroidManifest.xml failed, treat it as raw file.");
-			return buildManifestRaw(appDir, flags);
-		}
-	}
-
-	public void buildLib(File appDir, HashMap<String, Boolean> flags)
+	private static void cmdInstallFramework(String[] args)
 			throws AndrolibException {
-		File working = new File(appDir, "lib");
-		if (!working.exists()) {
+		String tag = null;
+		String frame_path = null;
+		int i = 0;
+		switch (args.length) {
+		case 4:
+			if (args[2].equalsIgnoreCase("--frame-path")) {
+				i++;
+			} else {
+				throw new InvalidArgsError();
+			}
+		case 3:
+			frame_path = args[2 + i];
+		case 2:
+			if (!(args[1].equalsIgnoreCase("--frame-path"))) {
+				tag = args[1];
+			}
+		case 1:
+			new Androlib().installFramework(new File(args[0]), tag, frame_path);
 			return;
 		}
-		File stored = new File(appDir, APK_DIRNAME + "/lib");
-		if (flags.get("forceBuildAll") || isModified(working, stored)) {
-			LOGGER.info("Copying libs...");
-			try {
-				OS.rmdir(stored);
-				OS.cpdir(working, stored);
-			} catch (BrutException ex) {
-				throw new AndrolibException(ex);
-			}
-		}
+
+		throw new InvalidArgsError();
 	}
 
-	public void buildApk(File appDir, File outApk,
-			HashMap<String, Boolean> flags) throws AndrolibException {
-		LOGGER.info("Building apk file...");
-		if (outApk.exists()) {
-			outApk.delete();
+	private static void cmdPublicizeResources(String[] args)
+			throws InvalidArgsError, AndrolibException {
+		if (args.length != 1) {
+			throw new InvalidArgsError();
+		}
+
+		new Androlib().publicizeResources(new File(args[0]));
+	}
+
+	private static void version_print() {
+		System.out.println(Androlib.getVersion());
+	}
+
+	private static void usage() {
+		System.out
+				.println("Apktool v"
+						+ Androlib.getVersion()
+						+ " - a tool for reengineering Android apk files\n"
+						+ "Copyright 2010 Ryszard Wiśniewski <brut.alll@gmail.com>\n"
+						+ "with smali v"
+						+ ApktoolProperties.get("smaliVersion")
+						+ ", and baksmali v"
+						+ ApktoolProperties.get("baksmaliVersion")
+						+ "\n"
+						+ "Updated by @iBotPeaches <connor.tumbleson@gmail.com> \n"
+						+ "Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)\n"
+						+ "\n"
+						+ "Usage: apktool [-q|--quiet OR -v|--verbose] COMMAND [...]\n"
+						+ "\n"
+						+ "COMMANDs are:\n"
+						+ "\n"
+						+ "    d[ecode] [OPTS] <file.apk> [<dir>]\n"
+						+ "        Decode <file.apk> to <dir>.\n"
+						+ "\n"
+						+ "        OPTS:\n"
+						+ "\n"
+						+ "        -s, --no-src\n"
+						+ "            Do not decode sources.\n"
+						+ "        -r, --no-res\n"
+						+ "            Do not decode resources.\n"
+						+ "        -d, --debug\n"
+						+ "            Decode in debug mode. Check project page for more info.\n"
+						+ "        -b, --no-debug-info\n"
+						+ "            Baksmali -- don't write out debug info (.local, .param, .line, etc.)\n"
+						+ "        -f, --force\n"
+						+ "            Force delete destination directory.\n"
+						+ "        -t <tag>, --frame-tag <tag>\n"
+						+ "            Try to use framework files tagged by <tag>.\n"
+						+ "        --frame-path <dir>\n"
+						+ "            Use the specified directory for framework files\n"
+						+ "        --keep-broken-res\n"
+						+ "            Use if there was an error and some resources were dropped, e.g.:\n"
+						+ "            \"Invalid config flags detected. Dropping resources\", but you\n"
+						+ "            want to decode them anyway, even with errors. You will have to\n"
+						+ "            fix them manually before building."
+						+ "\n\n"
+						+ "    b[uild] [OPTS] [<app_path>] [<out_file>]\n"
+						+ "        Build an apk from already decoded application located in <app_path>.\n"
+						+ "\n"
+						+ "        It will automatically detect, whether files was changed and perform\n"
+						+ "        needed steps only.\n"
+						+ "\n"
+						+ "        If you omit <app_path> then current directory will be used.\n"
+						+ "        If you omit <out_file> then <app_path>/dist/<name_of_original.apk>\n"
+						+ "        will be used.\n"
+						+ "\n"
+						+ "        OPTS:\n"
+						+ "\n"
+						+ "        -f, --force-all\n"
+						+ "            Skip changes detection and build all files.\n"
+						+ "        -d, --debug\n"
+						+ "            Build in debug mode. Check project page for more info.\n"
+						+ "        -a, --aapt\n"
+						+ "            Loads aapt from specified location.\n"
+						+ "        -c, --copy-original\n"
+						+ "            Copies original AndroidManifest.xml and META-INF.\n"
+            + "        --frame-path <dir>\n"
+            + "            Use the specified directory for framework files\n"
+						+ "\n"
+						+ "    if|install-framework <framework.apk> [<tag>] --frame-path [<location>] \n"
+						+ "        Install framework file to your system.\n"
+						+ "\n"
+						+ "For additional info, see: http://code.google.com/p/android-apktool/"
+						+ "\n"
+						+ "For smali/baksmali info, see: http://code.google.com/p/smali/");
+	}
+
+	private static void setupLogging(Verbosity verbosity) {
+		Logger logger = Logger.getLogger("");
+		for (Handler handler : logger.getHandlers()) {
+			logger.removeHandler(handler);
+		}
+		if (verbosity == Verbosity.QUIET) {
+			return;
+		}
+
+		Handler handler = new ConsoleHandler();
+		logger.addHandler(handler);
+
+		if (verbosity == Verbosity.VERBOSE) {
+			handler.setLevel(Level.ALL);
+			logger.setLevel(Level.ALL);
 		} else {
-			File outDir = outApk.getParentFile();
-			if (outDir != null && !outDir.exists()) {
-				outDir.mkdirs();
-			}
+			handler.setFormatter(new Formatter() {
+				@Override
+				public String format(LogRecord record) {
+					return record.getLevel().toString().charAt(0) + ": "
+							+ record.getMessage()
+							+ System.getProperty("line.separator");
+				}
+			});
 		}
-		File assetDir = new File(appDir, "assets");
-		if (!assetDir.exists()) {
-			assetDir = null;
-		}
-		mAndRes.aaptPackage(outApk, null, null, new File(appDir, APK_DIRNAME),
-				assetDir, null, flags, mAaptPath);
 	}
 
-	public void publicizeResources(File arscFile) throws AndrolibException {
-		mAndRes.publicizeResources(arscFile);
+	private static enum Verbosity {
+		NORMAL, VERBOSE, QUIET;
 	}
 
-	public void installFramework(File frameFile, String tag, String frame_path)
-			throws AndrolibException {
-		mAndRes.setFrameworkFolder(frame_path);
-		mAndRes.installFramework(frameFile, tag);
+	private static boolean Advanced = false;
+
+	static class InvalidArgsError extends AndrolibException {
+
 	}
-
-	public boolean isFrameworkApk(ResTable resTable) {
-		for (ResPackage pkg : resTable.listMainPackages()) {
-			if (pkg.getId() < 64) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	public static String getVersion() {
-		String version = ApktoolProperties.get("application.version");
-		return version.endsWith("-SNAPSHOT") ? version.substring(0,
-				version.length() - 9)
-				+ '.' + ApktoolProperties.get("git.commit.id.abbrev") : version;
-	}
-
-	private File[] parseUsesFramework(Map<String, Object> usesFramework)
-			throws AndrolibException {
-		if (usesFramework == null) {
-			return null;
-		}
-
-		List<Integer> ids = (List<Integer>) usesFramework.get("ids");
-		if (ids == null || ids.isEmpty()) {
-			return null;
-		}
-
-		String tag = (String) usesFramework.get("tag");
-		File[] files = new File[ids.size()];
-		int i = 0;
-		for (int id : ids) {
-			files[i++] = mAndRes.getFrameworkApk(id, tag);
-		}
-		return files;
-	}
-
-	private boolean isModified(File working, File stored) {
-		if (!stored.exists()) {
-			return true;
-		}
-		return BrutIO.recursiveModifiedTime(working) > BrutIO
-				.recursiveModifiedTime(stored);
-	}
-
-	private boolean isModified(File[] working, File[] stored) {
-		for (int i = 0; i < stored.length; i++) {
-			if (!stored[i].exists()) {
-				return true;
-			}
-		}
-		return BrutIO.recursiveModifiedTime(working) > BrutIO
-				.recursiveModifiedTime(stored);
-	}
-
-	private File[] newFiles(String[] names, File dir) {
-		File[] files = new File[names.length];
-		for (int i = 0; i < names.length; i++) {
-			files[i] = new File(dir, names[i]);
-		}
-		return files;
-	}
-
-	public void setApkFile(File apkFile) {
-		mOrigApkFile = new ExtFile(apkFile);
-	}
-	
-	public void setFrameworkFolder(String path) {
-	  mAndRes.setFrameworkFolder(path);
-	}
-
-	private ExtFile mOrigApkFile = null;
-	private String mAaptPath = null;
-
-	private final static Logger LOGGER = Logger.getLogger(Androlib.class
-			.getName());
-
-	private final static String SMALI_DIRNAME = "smali";
-	private final static String APK_DIRNAME = "build/apk";
-	private final static String[] APK_RESOURCES_FILENAMES = new String[] {
-			"resources.arsc", "AndroidManifest.xml", "res" };
-	private final static String[] APK_RESOURCES_WITHOUT_RES_FILENAMES = new String[] {
-			"resources.arsc", "AndroidManifest.xml" };
-	private final static String[] APP_RESOURCES_FILENAMES = new String[] {
-			"AndroidManifest.xml", "res" };
-	private final static String[] APK_MANIFEST_FILENAMES = new String[] { "AndroidManifest.xml" };
 }
