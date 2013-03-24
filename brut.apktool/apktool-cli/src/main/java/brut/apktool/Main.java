@@ -183,11 +183,9 @@ public class Main {
 		flags.put("verbose", false);
 		flags.put("framework", false);
 		flags.put("update", false);
-		flags.put("copyOriginal", false);
 
 		int i;
 		int skip = 0;
-
 		ExtFile mOrigApk = null;
 		String mAaptPath = "";
 		for (i = 0; i < args.length; i++) {
@@ -204,8 +202,6 @@ public class Main {
 			} else if ("-a".equals(opt) || "--aapt".equals(opt)) {
 				mAaptPath = args[i + 1];
 				skip = 1;
-			} else if ("-c".equals(opt) || "--copy-original".equals(opt)) {
-				flags.put("copyOriginal", true);
 			} else if ("--frame-path".equals(opt)) {
 			    i++;
 	        instance.setFrameworkFolder(args[i]);
@@ -333,8 +329,6 @@ public class Main {
 						+ "            Build in debug mode. Check project page for more info.\n"
 						+ "        -a, --aapt\n"
 						+ "            Loads aapt from specified location.\n"
-						+ "        -c, --copy-original\n"
-						+ "            Copies original AndroidManifest.xml and META-INF.\n"
             + "        --frame-path <dir>\n"
             + "            Use the specified directory for framework files\n"
 						+ "\n"
