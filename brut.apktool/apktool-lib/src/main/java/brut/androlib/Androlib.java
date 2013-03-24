@@ -68,7 +68,7 @@ public class Androlib {
 			File smaliDir = new File(outDir, SMALI_DIRNAME);
 			OS.rmdir(smaliDir);
 			smaliDir.mkdirs();
-			LOGGER.info("Baksmaling...");
+			LOGGER.info("Baksmali 중...");
 			SmaliDecoder.decode(apkFile, smaliDir, debug, bakdeb);
 		} catch (BrutException ex) {
 			throw new AndrolibException(ex);
@@ -77,7 +77,7 @@ public class Androlib {
 
 	public void decodeSourcesJava(ExtFile apkFile, File outDir, boolean debug)
 			throws AndrolibException {
-		LOGGER.info("Decoding Java sources...");
+		LOGGER.info("자바 소스 디코딩 중...");
 		new AndrolibJava().decode(apkFile, outDir);
 	}
 
@@ -115,7 +115,7 @@ public class Androlib {
 
 	public void decodeRawFiles(ExtFile apkFile, File outDir)
 			throws AndrolibException {
-		LOGGER.info("Copying assets and libs...");
+		LOGGER.info("assests와 lib폴더 복사 중...");
 		try {
 			Directory in = apkFile.getDirectory();
 			if (in.containsDir("assets")) {
@@ -209,7 +209,7 @@ public class Androlib {
 		if (!buildSourcesRaw(appDir, flags)
 				&& !buildSourcesSmali(appDir, flags)
 				&& !buildSourcesJava(appDir, flags)) {
-			LOGGER.warning("Could not find sources");
+			LOGGER.warning("소스를 찾을 수 없음");
 		}
 	}
 
@@ -222,7 +222,7 @@ public class Androlib {
 			}
 			File stored = new File(appDir, APK_DIRNAME + "/classes.dex");
 			if (flags.get("forceBuildAll") || isModified(working, stored)) {
-				LOGGER.info("Copying classes.dex file...");
+				LOGGER.info("classes.dex 파일 복사 중...");
 				BrutIO.copyAndClose(new FileInputStream(working),
 						new FileOutputStream(stored));
 			}
@@ -240,10 +240,10 @@ public class Androlib {
 		}
 		File dex = new File(appDir, APK_DIRNAME + "/classes.dex");
 		if (!flags.get("forceBuildAll")) {
-			LOGGER.info("Checking whether sources has changed...");
+			LOGGER.info("변경된 리소스 확인 중...");
 		}
 		if (flags.get("forceBuildAll") || isModified(smaliDir, dex)) {
-			LOGGER.info("Smaling...");
+			LOGGER.info("Smali 중...");
 			dex.delete();
 			SmaliBuilder.build(smaliDir, dex, flags);
 		}
@@ -258,10 +258,10 @@ public class Androlib {
 		}
 		File dex = new File(appDir, APK_DIRNAME + "/classes.dex");
 		if (!flags.get("forceBuildAll")) {
-			LOGGER.info("Checking whether sources has changed...");
+			LOGGER.info("변경된 리소스 확인 중...");
 		}
 		if (flags.get("forceBuildAll") || isModified(javaDir, dex)) {
-			LOGGER.info("Building java sources...");
+			LOGGER.info("자바 소스 빌드 중...");
 			dex.delete();
 			new AndrolibJava().build(javaDir, dex);
 		}
@@ -273,7 +273,7 @@ public class Androlib {
 		if (!buildResourcesRaw(appDir, flags)
 				&& !buildResourcesFull(appDir, flags, usesFramework)
 				&& !buildManifest(appDir, flags, usesFramework)) {
-			LOGGER.warning("Could not find resources");
+			LOGGER.warning("리소를 찾을 수 없음");
 		}
 	}
 
@@ -285,7 +285,7 @@ public class Androlib {
 			}
 			File apkDir = new File(appDir, APK_DIRNAME);
 			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
+				LOGGER.info("변경된 리소스 확인 중...");
 			}
 			if (flags.get("forceBuildAll")
 					|| isModified(newFiles(APK_RESOURCES_FILENAMES, appDir),
@@ -308,13 +308,13 @@ public class Androlib {
 				return false;
 			}
 			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
+				LOGGER.info("변경된 리소스 확인 중...");
 			}
 			File apkDir = new File(appDir, APK_DIRNAME);
 			if (flags.get("forceBuildAll")
 					|| isModified(newFiles(APP_RESOURCES_FILENAMES, appDir),
 							newFiles(APK_RESOURCES_FILENAMES, apkDir))) {
-				LOGGER.info("Building resources...");
+				LOGGER.info("리소스 빌드 중...");
 
 				File apkFile = File.createTempFile("APKTOOL", null);
 				apkFile.delete();
@@ -366,7 +366,7 @@ public class Androlib {
 				return false;
 			}
 			if (!flags.get("forceBuildAll")) {
-				LOGGER.info("Checking whether resources has changed...");
+				LOGGER.info("변경된 리소스 확인 중...");
 			}
 			
 			File apkDir = new File(appDir, APK_DIRNAME);
@@ -378,7 +378,7 @@ public class Androlib {
 			if (flags.get("forceBuildAll")
 					|| isModified(newFiles(APK_MANIFEST_FILENAMES, appDir),
 							newFiles(APK_MANIFEST_FILENAMES, apkDir))) {
-				LOGGER.info("Building AndroidManifest.xml...");
+				LOGGER.info("AndroidManifest.xml 빌드 중...");
 
 				File apkFile = File.createTempFile("APKTOOL", null);
 				apkFile.delete();
@@ -415,7 +415,7 @@ public class Androlib {
 		}
 		File stored = new File(appDir, APK_DIRNAME + "/lib");
 		if (flags.get("forceBuildAll") || isModified(working, stored)) {
-			LOGGER.info("Copying libs...");
+			LOGGER.info("lib 복사 중...");
 			try {
 				OS.rmdir(stored);
 				OS.cpdir(working, stored);
@@ -427,7 +427,7 @@ public class Androlib {
 
 	public void buildApk(File appDir, File outApk,
 			HashMap<String, Boolean> flags) throws AndrolibException {
-		LOGGER.info("Building apk file...");
+		LOGGER.info("APK 파일 빌드 중...");
 		if (outApk.exists()) {
 			outApk.delete();
 		} else {

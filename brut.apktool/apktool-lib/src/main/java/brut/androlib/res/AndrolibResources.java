@@ -72,7 +72,7 @@ final public class AndrolibResources {
 
 	public ResPackage loadMainPkg(ResTable resTable, ExtFile apkFile)
 			throws AndrolibException {
-		LOGGER.info("Loading resource table...");
+		LOGGER.info("리소스 테이블 로딩 중...");
 		ResPackage[] pkgs = getResPackagesFromApk(apkFile, resTable,
 				sKeepBroken);
 		ResPackage pkg = null;
@@ -98,7 +98,7 @@ final public class AndrolibResources {
 		}
 
 		resTable.addPackage(pkg, true);
-		LOGGER.info("Loaded.");
+		LOGGER.info("불러오기 완료.");
 		return pkg;
 	}
 
@@ -106,7 +106,7 @@ final public class AndrolibResources {
 			String frameTag) throws AndrolibException {
 		File apk = getFrameworkApk(id, frameTag);
 
-		LOGGER.info("Loading resource table from file: " + apk);
+		LOGGER.info(apk + " 에서 리소스 테이블 로딩 중");
 		ResPackage[] pkgs = getResPackagesFromApk(new ExtFile(apk), resTable,
 				true);
 
@@ -122,7 +122,7 @@ final public class AndrolibResources {
 		}
 
 		resTable.addPackage(pkg, false);
-		LOGGER.info("Loaded.");
+		LOGGER.info("불러오기 완료.");
 		return pkg;
 	}
 
@@ -210,7 +210,7 @@ final public class AndrolibResources {
 		} else {
 			try {
 
-				LOGGER.info("Renamed manifest package found! Fixing...");
+				LOGGER.info("manifest 이름 변경된 파일 발견! 수정 중...");
 				DocumentBuilderFactory docFactory = DocumentBuilderFactory
 						.newInstance();
 				DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
@@ -259,7 +259,7 @@ final public class AndrolibResources {
 			inApk = apkFile.getDirectory();
 			out = new FileDirectory(outDir);
 
-			LOGGER.info("Decoding AndroidManifest.xml with resources...");
+			LOGGER.info("AndroidManifest.xml과 resources 디코드 중...");
 
 			fileDecoder.decodeManifest(inApk, "AndroidManifest.xml", out,
 					"AndroidManifest.xml");
@@ -280,17 +280,17 @@ final public class AndrolibResources {
 		for (ResPackage pkg : resTable.listMainPackages()) {
 			attrDecoder.setCurrentPackage(pkg);
 
-			LOGGER.info("Decoding file-resources...");
+			LOGGER.info("파일 리소스 디코드 중...");
 			for (ResResource res : pkg.listFiles()) {
 				fileDecoder.decode(res, in, out);
 			}
 
-			LOGGER.info("Decoding values */* XMLs...");
+			LOGGER.info("values */* XML 폴더를 디코드 중...");
 			for (ResValuesFile valuesFile : pkg.listValuesFiles()) {
 				generateValuesFile(valuesFile, out, xmlSerializer);
 			}
 			generatePublicXml(pkg, out, xmlSerializer);
-			LOGGER.info("Done.");
+			LOGGER.info("완료됨.");
 		}
 
 		AndrolibException decodeError = duo.m2.getFirstError();
@@ -336,7 +336,7 @@ final public class AndrolibResources {
 							+ " being used as aapt location.");
 				}
 			} else {
-				LOGGER.warning("aapt location could not be found. Defaulting back to default");
+				LOGGER.warning("aapt의 위치를 찾을 수 없습니다. Defaulting back to default");
 				cmd.add("aapt");
 			}
 		} else {
@@ -634,7 +634,7 @@ final public class AndrolibResources {
 			entry.setCrc(crc.getValue());
 			out.putNextEntry(entry);
 			out.write(data);
-			LOGGER.info("Framework installed to: " + outFile);
+			LOGGER.info(outFile + " (framework 설치 됨)");
 		} catch (ZipException ex) {
 			throw new AndrolibException(ex);
 		} catch (IOException ex) {
