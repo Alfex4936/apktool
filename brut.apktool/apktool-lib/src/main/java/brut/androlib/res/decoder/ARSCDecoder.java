@@ -84,7 +84,6 @@ public class ARSCDecoder {
 		// store package
 		if (this.mResTable.isPackageInfoValueSet("cur_package") != true) {
 			this.mResTable.addPackageInfo("cur_package", packages[0].getName());
-			this.mResTable.addPackageInfo("cur_package_id", String.valueOf(packages[0].getId()));
 		}
 		return packages;
 	}
