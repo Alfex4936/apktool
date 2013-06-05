@@ -230,6 +230,9 @@ public class ResConfigFlags {
 		case UI_MODE_TYPE_APPLIANCE:
 			ret.append("-appliance");
 			break;
+		case UI_MODE_TYPE_INVERTED:
+			ret.append("-inverted");
+			break;
 		}
 		switch (uiMode & MASK_UI_MODE_NIGHT) {
 		case UI_MODE_NIGHT_YES:
